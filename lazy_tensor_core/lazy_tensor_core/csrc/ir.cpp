@@ -115,10 +115,6 @@ std::string Output::ToString() const {
   return ss.str();
 }
 
-const lazy_tensors::Shape& Value::shape() const { return node->shape(index); }
-
-const lazy_tensors::Shape& Value::node_shape() const { return node->shape(); }
-
 lazy_tensors::hash_t Value::hash() const {
   return lazy_tensors::util::HashCombine(node->hash(), index);
 }
