@@ -7,7 +7,7 @@ namespace ir {
 namespace ops {
 
 Triu::Triu(const Value& input, lazy_tensors::int64 diagonal)
-    : TsNode(ir::OpKind(at::aten::triu), {input}, input.shape(),
+    : TsNode(ir::OpKind(at::aten::triu), {input}, GetShapeFromTsValue(input),
            /*num_outputs=*/1, lazy_tensors::util::MHash(diagonal)),
       diagonal_(diagonal) {}
 

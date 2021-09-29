@@ -10,7 +10,7 @@ namespace ops {
 TSLogSoftmaxBackward::TSLogSoftmaxBackward(const Value& grad_output,
     const Value& output, lazy_tensors::int64 dim, const Value& self)
     : TsNode(ir::OpKind(at::aten::_log_softmax_backward_data),
-          {grad_output, output, self}, grad_output.shape(),
+          {grad_output, output, self}, GetShapeFromTsValue(grad_output),
           /*num_outputs=*/1, lazy_tensors::util::MHash(dim)),
       dim_(dim) {}
 

@@ -18,7 +18,7 @@ AsStridedViewUpdate::AsStridedViewUpdate(
     : TsNode(ltc_as_strided_view_update, {target, input},
            [&]() {
              return lazy_tensors::ShapeUtil::MakeShape(
-                 target.shape().element_type(), size);
+                 GetShapeFromTsValue(target).element_type(), size);
            },
            /*num_outputs=*/1,
            lazy_tensors::util::MHash(size, stride, storage_offset)),

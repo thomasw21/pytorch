@@ -7,7 +7,7 @@ namespace ir {
 namespace ops {
 
 Cholesky::Cholesky(const Value& input, bool lower)
-    : TsNode(ir::OpKind(at::aten::cholesky), {input}, input.shape(),
+    : TsNode(ir::OpKind(at::aten::cholesky), {input}, GetShapeFromTsValue(input),
            /*num_outputs=*/1, lazy_tensors::util::MHash(lower)),
       lower_(lower) {}
 

@@ -13,9 +13,9 @@ lazy_tensors::Shape NodeOutputShape(
     const Value& input, const c10::optional<at::ScalarType>& dtype) {
   if (dtype) {
     return lazy_tensors::ShapeUtil::ChangeElementType(
-        input.shape(), MakeLtcPrimitiveType(*dtype, /*device=*/nullptr));
+        GetShapeFromTsValue(input), MakeLtcPrimitiveType(*dtype, /*device=*/nullptr));
   }
-  return input.shape();
+  return GetShapeFromTsValue(input);
 }
 
 }  // namespace

@@ -25,7 +25,7 @@ namespace ops {
 
 #define PTLTC_UNARY_OP(name, sym)                          \
   NodePtr name(const Value& input) {                       \
-    return GenericOp(OpKind(sym), {input}, input.shape()); \
+    return GenericOp(OpKind(sym), {input}, GetShapeFromTsValue(input)); \
   }
 
 #define PTLTC_BINARY_OP(name, sym)                                           \
@@ -75,15 +75,15 @@ NodePtr Trunc(const Value& input) { return Floor(Abs(input)) * SignOp(input); }
 NodePtr FracOp(const Value& input) { return input - Trunc(input); }
 
 NodePtr ReciprocalOp(const Value& input) {
-  return GenericOp(OpKind(at::aten::reciprocal), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::reciprocal), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr SignOp(const Value& input) {
-  return GenericOp(OpKind(at::aten::sign), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::sign), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr Abs(const Value& input) {
-  return GenericOp(OpKind(at::aten::abs), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::abs), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr ReluOp(const Value& input) {
@@ -94,19 +94,19 @@ NodePtr ReluOp(const Value& input) {
 }
 
 NodePtr HardSigmoid(const Value& input) {
-  return GenericOp(OpKind(at::aten::hardsigmoid), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::hardsigmoid), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr HardSigmoidBackward(const Value& grad_output, const Value& input) {
   return GenericOp(OpKind(at::aten::hardsigmoid_backward), {grad_output, input},
-                   input.shape());
+                   GetShapeFromTsValue(input));
 }
 
 std::tuple<NodePtr, NodePtr> LogSigmoid(const Value& input) {
   ScopePusher ir_scope(at::aten::log_sigmoid.toQualString());
   // Use log-sum-exp trick to avoid overflow.
   NodePtr neg_input = Neg(input);
-  NodePtr max_elem = Max(ScalarOp(0, input.shape()), neg_input);
+  NodePtr max_elem = Max(ScalarOp(0, GetShapeFromTsValue(input)), neg_input);
   NodePtr buffer = Exp(Neg(max_elem)) + Exp(neg_input - max_elem);
   NodePtr output = Neg(max_elem + Log(buffer));
   return std::make_tuple(output, buffer);
@@ -115,9 +115,9 @@ std::tuple<NodePtr, NodePtr> LogSigmoid(const Value& input) {
 NodePtr LogSigmoidBackward(const Value& grad_output, const Value& input,
                            const Value& buffer) {
   ScopePusher ir_scope(at::aten::log_sigmoid_backward.toQualString());
-  NodePtr zero = ScalarOp(0, input.shape());
-  NodePtr one = ScalarOp(1, input.shape());
-  NodePtr minus_one = ScalarOp(-1, input.shape());
+  NodePtr zero = ScalarOp(0, GetShapeFromTsValue(input));
+  NodePtr one = ScalarOp(1, GetShapeFromTsValue(input));
+  NodePtr minus_one = ScalarOp(-1, GetShapeFromTsValue(input));
   NodePtr max_deriv =
       Where(ComparisonOp(at::aten::lt, input, zero), minus_one, zero);
   NodePtr sign = Where(ComparisonOp(at::aten::lt, input, zero), one, minus_one);
@@ -125,29 +125,29 @@ NodePtr LogSigmoidBackward(const Value& grad_output, const Value& input,
 }
 
 NodePtr SiLU(const Value& input) {
-  return GenericOp(OpKind(at::aten::silu), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::silu), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr Sigmoid(const Value& input) {
-  return GenericOp(OpKind(at::aten::sigmoid), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::sigmoid), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr SigmoidBackward(const Value& grad_output, const Value& output) {
-  return grad_output * (ScalarOp(1, output.shape()) - output) * output;
+  return grad_output * (ScalarOp(1, GetShapeFromTsValue(output)) - output) * output;
 }
 
 NodePtr LogSoftmaxBackwardOp(const Value& grad_output, const Value& output,
                              lazy_tensors::int64 dim) {
   return MakeNode<LogSoftmaxBackward>(
       grad_output, output,
-      Helpers::GetCanonicalDimensionIndex(dim, grad_output.shape().rank()));
+      Helpers::GetCanonicalDimensionIndex(dim, GetShapeFromTsValue(grad_output).rank()));
 }
 
 NodePtr TSLogSoftmaxBackwardOp(const Value& grad_output, const Value& output,
                                lazy_tensors::int64 dim, const Value& self) {
   return MakeNode<TSLogSoftmaxBackward>(
       grad_output, output,
-      Helpers::GetCanonicalDimensionIndex(dim, grad_output.shape().rank()),
+      Helpers::GetCanonicalDimensionIndex(dim, GetShapeFromTsValue(grad_output).rank()),
       self);
 }
 
@@ -155,19 +155,19 @@ NodePtr SoftmaxBackwardOp(const Value& grad_output, const Value& output,
                           lazy_tensors::int64 dim) {
   return MakeNode<SoftmaxBackward>(
       grad_output, output,
-      Helpers::GetCanonicalDimensionIndex(dim, grad_output.shape().rank()));
+      Helpers::GetCanonicalDimensionIndex(dim, GetShapeFromTsValue(grad_output).rank()));
 }
 
 NodePtr TSSoftmaxBackwardOp(const Value& grad_output, const Value& output,
                             lazy_tensors::int64 dim, const Value& self) {
   return MakeNode<TSSoftmaxBackward>(
       grad_output, output,
-      Helpers::GetCanonicalDimensionIndex(dim, grad_output.shape().rank()),
+      Helpers::GetCanonicalDimensionIndex(dim, GetShapeFromTsValue(grad_output).rank()),
       self);
 }
 
 NodePtr Clamp(const Value& input, const Value& min, const Value& max) {
-  return GenericOp(OpKind(at::aten::clamp), {input, min, max}, input.shape());
+  return GenericOp(OpKind(at::aten::clamp), {input, min, max}, GetShapeFromTsValue(input));
 }
 
 NodePtr Ger(const Value& input, const Value& other) {
@@ -219,7 +219,7 @@ NodePtr ComparisonOp(c10::Symbol kind, const Value& input, const Value& other) {
 
 NodePtr Where(const Value& condition, const Value& input, const Value& other) {
   return GenericOp(OpKind(at::aten::where), {condition, input, other},
-                   input.shape());
+                   GetShapeFromTsValue(input));
 }
 
 NodePtr ARange(const at::Scalar& start, const at::Scalar& end,
@@ -306,7 +306,7 @@ NodePtr Norm(const Value& input, const c10::optional<at::Scalar>& p,
   auto dimensions = lazy_tensors::util::ToVector<lazy_tensors::int64>(dims);
   if (dimensions.empty()) {
     dimensions =
-        lazy_tensors::util::Iota<lazy_tensors::int64>(input.shape().rank());
+        lazy_tensors::util::Iota<lazy_tensors::int64>(GetShapeFromTsValue(input).rank());
   }
   if (!p.has_value() || p->toDouble() == 2.0) {
     NodePtr square = input * input;
@@ -329,9 +329,9 @@ NodePtr Norm(const Value& input, const c10::optional<at::Scalar>& p,
     return MakeNode<Sum>(Abs(input), dimensions, keepdim, dtype);
   }
   // Generic sum(x^p)^(1/p) norms.
-  NodePtr norm_exp = ScalarOp(norm_value, input.shape().element_type());
+  NodePtr norm_exp = ScalarOp(norm_value, GetShapeFromTsValue(input).element_type());
   NodePtr norm_exp_inv =
-      ScalarOp(1.0 / norm_value, input.shape().element_type());
+      ScalarOp(1.0 / norm_value, GetShapeFromTsValue(input).element_type());
   NodePtr exp = Pow(Abs(input), norm_exp);
   NodePtr result = MakeNode<Sum>(exp, dimensions, keepdim, dtype);
   return Pow(result, norm_exp_inv);
@@ -348,7 +348,7 @@ NodePtr Identity(lazy_tensors::int64 lines, lazy_tensors::int64 cols,
 NodePtr Elu(const Value& input, const at::Scalar& alpha,
             const at::Scalar& scale, const at::Scalar& input_scale) {
   ScopePusher ir_scope(at::aten::elu.toQualString());
-  const lazy_tensors::Shape& shape = input.shape();
+  const lazy_tensors::Shape& shape = GetShapeFromTsValue(input);
   NodePtr scaled_input = input * ScalarOp(input_scale, shape);
   NodePtr zero = ScalarOp(0, shape);
   NodePtr one = ScalarOp(1, shape);
@@ -362,7 +362,7 @@ NodePtr EluBackward(const Value& grad_output, const Value& output,
                     const at::Scalar& alpha, const at::Scalar& scale,
                     const at::Scalar& input_scale) {
   ScopePusher ir_scope(at::aten::elu_backward.toQualString());
-  const lazy_tensors::Shape& shape = grad_output.shape();
+  const lazy_tensors::Shape& shape = GetShapeFromTsValue(grad_output);
   NodePtr negative_output_branch =
       ScalarOp(input_scale, shape) *
       (output + ScalarOp(alpha, shape) * ScalarOp(scale, shape));
@@ -375,7 +375,7 @@ NodePtr EluBackward(const Value& grad_output, const Value& output,
 NodePtr Gelu(const Value& input) {
   ScopePusher ir_scope("aten::gelu");
   // input * 0.5 * (1.0 + torch.erf(input / math.sqrt(2.0)))
-  const lazy_tensors::Shape& shape = input.shape();
+  const lazy_tensors::Shape& shape = GetShapeFromTsValue(input);
   return input * ScalarOp(0.5, shape) *
          (Erf(input * ScalarOp(M_SQRT1_2, shape)) + ScalarOp(1.0, shape));
 }
@@ -383,7 +383,7 @@ NodePtr Gelu(const Value& input) {
 NodePtr GeluBackward(const Value& grad, const Value& input) {
   ScopePusher ir_scope("aten::gelu_backward");
   const float kAlpha = M_2_SQRTPI * M_SQRT1_2 * 0.5;
-  const lazy_tensors::Shape& shape = input.shape();
+  const lazy_tensors::Shape& shape = GetShapeFromTsValue(input);
   NodePtr scratch = Erf(input * ScalarOp(M_SQRT1_2, shape));
   NodePtr dinput = Exp(input * input * ScalarOp(-0.5, shape));
   return grad * (ScalarOp(0.5, shape) * (ScalarOp(1.0, shape) + scratch) +
@@ -392,54 +392,54 @@ NodePtr GeluBackward(const Value& grad, const Value& input) {
 
 NodePtr Lshift(const Value& input, const at::Scalar& other) {
   ScopePusher ir_scope(at::aten::__lshift__.toQualString());
-  return input * ScalarOp(pow(2, other.to<double>()), input.shape());
+  return input * ScalarOp(pow(2, other.to<double>()), GetShapeFromTsValue(input));
 }
 
 NodePtr Lshift(const Value& input, const Value& other) {
   ScopePusher ir_scope(at::aten::__lshift__.toQualString());
-  return input * Pow(ScalarOp(2, input.shape()), other);
+  return input * Pow(ScalarOp(2, GetShapeFromTsValue(input)), other);
 }
 
 NodePtr Rshift(const Value& input, const at::Scalar& other) {
   ScopePusher ir_scope(at::aten::__rshift__.toQualString());
-  return input / ScalarOp(pow(2, other.to<double>()), input.shape());
+  return input / ScalarOp(pow(2, other.to<double>()), GetShapeFromTsValue(input));
 }
 
 NodePtr Rshift(const Value& input, const Value& other) {
   ScopePusher ir_scope(at::aten::__rshift__.toQualString());
-  return input / Pow(ScalarOp(2, input.shape()), other);
+  return input / Pow(ScalarOp(2, GetShapeFromTsValue(input)), other);
 }
 
 NodePtr Remainder(const Value& input, const Value& divisor) {
   ScopePusher ir_scope(at::aten::remainder.toQualString());
   NodePtr f = Fmod(input, Abs(divisor));
   return f + divisor * ComparisonOp(at::aten::lt, SignOp(f) * SignOp(divisor),
-                                    ScalarOp(0, input.shape()));
+                                    ScalarOp(0, GetShapeFromTsValue(input)));
 }
 
 NodePtr MaxUnary(const Value& input) {
-  LTC_CHECK_GT(lazy_tensors::ShapeUtil::ElementsIn(input.shape()), 0);
+  LTC_CHECK_GT(lazy_tensors::ShapeUtil::ElementsIn(GetShapeFromTsValue(input)), 0);
   return GenericOp(
       OpKind(at::aten::max), {input},
-      lazy_tensors::ShapeUtil::MakeShape(input.shape().element_type(), {}));
+      lazy_tensors::ShapeUtil::MakeShape(GetShapeFromTsValue(input).element_type(), {}));
 }
 
 NodePtr MinUnary(const Value& input) {
-  LTC_CHECK_GT(lazy_tensors::ShapeUtil::ElementsIn(input.shape()), 0);
+  LTC_CHECK_GT(lazy_tensors::ShapeUtil::ElementsIn(GetShapeFromTsValue(input)), 0);
   return GenericOp(
       OpKind(at::aten::min), {input},
-      lazy_tensors::ShapeUtil::MakeShape(input.shape().element_type(), {}));
+      lazy_tensors::ShapeUtil::MakeShape(GetShapeFromTsValue(input).element_type(), {}));
 }
 
 NodePtr Take(const Value& input, const Value& index) {
-  lazy_tensors::Shape result_shape = index.shape();
-  result_shape.set_element_type(input.shape().element_type());
+  lazy_tensors::Shape result_shape = GetShapeFromTsValue(index);
+  result_shape.set_element_type(GetShapeFromTsValue(input).element_type());
   return GenericOp(OpKind(at::aten::take), {input, index},
                    std::move(result_shape));
 }
 
 NodePtr LogDet(const Value& input) {
-  const lazy_tensors::Shape& input_shape = input.shape();
+  const lazy_tensors::Shape& input_shape = GetShapeFromTsValue(input);
   LTC_CHECK_GE(input_shape.rank(), 2) << input_shape;
   // The input tensor is ...,N,N
   lazy_tensors::Shape logdet_shape(input_shape);
@@ -449,7 +449,7 @@ NodePtr LogDet(const Value& input) {
 }
 
 NodePtr Inverse(const Value& input) {
-  return GenericOp(OpKind(at::aten::inverse), {input}, input.shape());
+  return GenericOp(OpKind(at::aten::inverse), {input}, GetShapeFromTsValue(input));
 }
 
 NodePtr BaddBmm(const Value& lhs, const Value& rhs, const Value& bias,

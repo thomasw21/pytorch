@@ -11,7 +11,7 @@ LogSoftmaxBackward::LogSoftmaxBackward(const Value& grad_output,
                                        const Value& output,
                                        lazy_tensors::int64 dim)
     : TsNode(ir::OpKind(at::aten::_log_softmax_backward_data),
-           {grad_output, output}, grad_output.shape(),
+           {grad_output, output}, GetShapeFromTsValue(grad_output),
            /*num_outputs=*/1, lazy_tensors::util::MHash(dim)),
       dim_(dim) {}
 

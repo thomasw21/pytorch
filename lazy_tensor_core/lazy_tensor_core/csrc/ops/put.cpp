@@ -8,7 +8,7 @@ namespace ops {
 
 Put::Put(const Value& input, const Value& index, const Value& source,
          bool accumulate)
-    : TsNode(ir::OpKind(at::aten::put), {input, index, source}, input.shape(),
+    : TsNode(ir::OpKind(at::aten::put), {input, index, source}, GetShapeFromTsValue(input),
            /*num_outputs=*/1, lazy_tensors::util::MHash(accumulate)),
       accumulate_(accumulate) {}
 
