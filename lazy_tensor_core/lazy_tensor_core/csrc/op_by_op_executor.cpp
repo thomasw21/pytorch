@@ -52,7 +52,7 @@ lazy_tensors::hash_t ComputeNodeKey(
                  GetParameterShape(operands[i], *input_shapes[i])));
   }
   key = lazy_tensors::util::HashCombine(
-      key, lazy_tensors::util::ShapeHash(node->shape()));
+      key, lazy_tensors::util::ShapeHash(GetShapeFromTsNode(*node)));
   return lazy_tensors::util::HashCombine(key, node->node_hash());
 }
 
