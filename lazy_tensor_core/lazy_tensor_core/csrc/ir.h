@@ -182,8 +182,6 @@ class Node {
   Node(OpKind op, OpList operands, size_t num_outputs = 1,
        lazy_tensors::hash_t hash_seed = 0x5a2d296e9);
 
-  void SetShapeDeferred(const std::function<lazy_tensors::Shape()>& shape_fn);
-
   // Contructor used to create leaf nodes.
   Node(OpKind op, lazy_tensors::Shape shape, size_t num_outputs,
        lazy_tensors::hash_t hash_seed);
@@ -196,11 +194,11 @@ class Node {
 
   // Retrieves the full shape of the IR Node. Note that if this is a
   // multi-output node, the returned shape will be a tuple.
-  const lazy_tensors::Shape& shape() const { return shape_; }
+  virtual const lazy_tensors::Shape& shape() const = 0;
 
   // Retrieves the shape of the output at a given index. If the node is not a
   // multi-output node, output_index must be zero.
-  const lazy_tensors::Shape& shape(size_t output_index) const;
+  virtual const lazy_tensors::Shape& shape(size_t output_index) const = 0;
 
   const std::vector<Output>& operands() const { return operands_as_outputs_; }
 
@@ -250,7 +248,6 @@ class Node {
   // The ID of the operation captured by this node.
   OpKind op_;
   size_t num_outputs_ = 1;
-  lazy_tensors::Shape shape_;
   // A node holds a real reference to its operands.
   std::vector<NodePtr> operands_;
   // Outputs do not hold references on the nodes, and neither do the uses, since
