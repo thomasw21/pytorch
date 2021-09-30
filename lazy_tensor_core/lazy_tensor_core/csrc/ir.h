@@ -217,9 +217,6 @@ class Node {
 
   void RemoveUse(const Use& use) { uses_.erase(use); }
 
-  lazy_tensors::Shape GetOpShape(
-      const std::function<lazy_tensors::Shape()>& shape_fn) const;
-
   static lazy_tensors::hash_t GetOpHash(OpKind op,
                                         const lazy_tensors::Shape& shape,
                                         lazy_tensors::hash_t hash_seed);
