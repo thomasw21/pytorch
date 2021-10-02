@@ -36,9 +36,13 @@ TORCH_API std::unordered_map<std::string, NNCLoweringFunction>&
 getNNCLoweringRegistry();
 TORCH_API NNCLoweringFunction getStandardLoweringFor(const std::string& op);
 
-struct RegisterNNCLoweringFunction {
-  RegisterNNCLoweringFunction(const std::string& name, NNCLoweringFunction fn) {
-    getNNCLoweringRegistry()[name] = fn;
+struct RegisterNNCLoweringsFunction {
+  RegisterNNCLoweringsFunction(
+      const std::vector<std::string>& schemas,
+      NNCLoweringFunction fn) {
+    for (const auto& schema : schemas) {
+      getNNCLoweringRegistry()[schema] = fn;
+    }
   }
 };
 
