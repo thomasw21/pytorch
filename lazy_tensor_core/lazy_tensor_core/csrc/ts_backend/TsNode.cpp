@@ -35,22 +35,42 @@ void TsNodeSetShapeDeferred(
   }
 }
 
+lazy_tensors::hash_t OperandHashes(const OpList& operands,
+                                   const lazy_tensors::hash_t& seed) {
+  lazy_tensors::hash_t hash = seed;
+  for (auto& operand : operands) {
+    hash = lazy_tensors::util::HashCombine(hash, operand.hash());
+  }
+  return hash;
+}
+
+// TODO(whc) rename:
+// hash_seed is a misnomer here; it's not really a 'seed', so much as
+// the partial node-hash computed by the derived class, typically over any
+// scalar constants
 TsNode::TsNode(OpKind op, OpList operands, lazy_tensors::Shape shape,
                size_t num_outputs, lazy_tensors::hash_t hash_seed)
-    : Node(op, operands, shape, num_outputs, hash_seed), shape_(shape) {}
+    : Node(
+          op, operands, num_outputs,
+          // TODO(WHC) this is inefficient (having to compute node_hash twice
+          // since I can't call hash() yet) so probably move dag_hash
+          // initialization to a separate function?
+          /* node_hash */ lazy_tensors::util::HashCombine(op.hash(), hash_seed),
+          /* dag_hash */
+          OperandHashes(operands,
+                        lazy_tensors::util::HashCombine(op.hash(), hash_seed))),
+      shape_(shape) {}
 
 TsNode::TsNode(OpKind op, OpList operands,
                const std::function<lazy_tensors::Shape()>& shape_fn,
                size_t num_outputs, lazy_tensors::hash_t hash_seed)
-    : Node(op, operands, shape_fn, num_outputs, hash_seed),
-      shape_(lazy_tensors::Shape()) {
+    : TsNode(op, operands, lazy_tensors::Shape(), num_outputs, hash_seed) {
   shape_ = GetOpShape(shape_fn);
 }
 
 TsNode::TsNode(OpKind op, OpList operands, size_t num_outputs,
                lazy_tensors::hash_t hash_seed)
-    : Node(op, operands, num_outputs, hash_seed),
-      shape_(lazy_tensors::Shape()) {}
+    : TsNode(op, operands, lazy_tensors::Shape(), num_outputs, hash_seed){}
 
 void TsNode::SetShapeDeferred(
     const std::function<lazy_tensors::Shape()>& shape_fn) {
@@ -59,7 +79,10 @@ void TsNode::SetShapeDeferred(
 
 TsNode::TsNode(OpKind op, lazy_tensors::Shape shape, size_t num_outputs,
                lazy_tensors::hash_t hash_seed)
-    : Node(op, shape, num_outputs, hash_seed), shape_(shape) {}
+    : Node(op, num_outputs,
+           /* node_hash */ GetOpHash(op, shape, hash_seed)),
+      shape_(shape) {
+}
 
 const lazy_tensors::Shape& TsNode::shape() const { return shape_; }
 
@@ -104,6 +127,19 @@ std::string TsNode::ToString() const {
   }
   EmitShortFrameInfo(ss, metadata().frame_info);
   return ss.str();
+}
+
+lazy_tensors::hash_t TsNode::GetOpHash(OpKind op,
+                                       const lazy_tensors::Shape& shape,
+                                       lazy_tensors::hash_t hash_seed) {
+  if (lazy_tensors::Shape::IsDynamicMode()) {
+    lazy_tensors::hash_t h = lazy_tensors::util::HashCombine(
+        op.hash(), lazy_tensors::util::Hash(shape.rank()));
+    return lazy_tensors::util::HashCombine(h, hash_seed);
+  }
+  lazy_tensors::hash_t h = lazy_tensors::util::HashCombine(
+      op.hash(), lazy_tensors::util::Hash(shape.ToString()));
+  return lazy_tensors::util::HashCombine(h, hash_seed);
 }
 
 }  // namespace ir

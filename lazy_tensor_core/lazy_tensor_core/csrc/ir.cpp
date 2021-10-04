@@ -116,37 +116,25 @@ lazy_tensors::hash_t OpKind::hash() const {
   return lazy_tensors::util::StringHash(op.toQualString());
 }
 
-Node::Node(OpKind op, OpList operands, lazy_tensors::Shape shape,
-           size_t num_outputs, lazy_tensors::hash_t hash_seed)
+Node::Node(OpKind op, OpList operands,
+           size_t num_outputs, lazy_tensors::hash_t node_hash, lazy_tensors::hash_t dag_hash)
     : op_(std::move(op)),
       num_outputs_(num_outputs),
-      node_hash_(lazy_tensors::util::HashCombine(op_.hash(), hash_seed)),
-      hash_(node_hash_) {
+      node_hash_(node_hash),
+      dag_hash_(dag_hash) {
   metadata_.scope = GetCurrentScope();
   metadata_.frame_info = GetFrameInfo();
   for (auto& operand : operands) {
     AddOperand(operand.node, operand.index);
-    hash_ = lazy_tensors::util::HashCombine(hash_, operand.hash());
   }
 }
 
-Node::Node(OpKind op, OpList operands,
-           const std::function<lazy_tensors::Shape()>& shape_fn,
-           size_t num_outputs, lazy_tensors::hash_t hash_seed)
-    : Node(std::move(op), operands, lazy_tensors::Shape(), num_outputs,
-           hash_seed) {}
-
-Node::Node(OpKind op, OpList operands, size_t num_outputs,
-           lazy_tensors::hash_t hash_seed)
-    : Node(std::move(op), operands, lazy_tensors::Shape(), num_outputs,
-           hash_seed) {}
-
-Node::Node(OpKind op, lazy_tensors::Shape shape, size_t num_outputs,
-           lazy_tensors::hash_t hash_seed)
+Node::Node(OpKind op, size_t num_outputs,
+           lazy_tensors::hash_t node_hash)
     : op_(std::move(op)),
       num_outputs_(num_outputs),
-      node_hash_(GetOpHash(op_, shape, hash_seed)),
-      hash_(node_hash_) {
+      node_hash_(node_hash),
+      dag_hash_(node_hash) {
   metadata_.scope = GetCurrentScope();
   metadata_.frame_info = GetFrameInfo();
 }
@@ -201,18 +189,6 @@ NodePtr Node::Clone(OpList operands) const {
   LTC_ERROR() << "Cloning not implemented for node: " << *this;
 }
 
-lazy_tensors::hash_t Node::GetOpHash(OpKind op,
-                                     const lazy_tensors::Shape& shape,
-                                     lazy_tensors::hash_t hash_seed) {
-  if (lazy_tensors::Shape::IsDynamicMode()) {
-    lazy_tensors::hash_t h = lazy_tensors::util::HashCombine(
-        op.hash(), lazy_tensors::util::Hash(shape.rank()));
-    return lazy_tensors::util::HashCombine(h, hash_seed);
-  }
-  lazy_tensors::hash_t h = lazy_tensors::util::HashCombine(
-      op.hash(), lazy_tensors::util::Hash(shape.ToString()));
-  return lazy_tensors::util::HashCombine(h, hash_seed);
-}
 
 std::vector<SourceLocation> Node::GetFrameInfo() {
   // At the time of writing, retrieving Python frames costs from 1us up to 20us.
