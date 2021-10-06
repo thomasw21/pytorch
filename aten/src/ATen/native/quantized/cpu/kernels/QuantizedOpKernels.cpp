@@ -2904,8 +2904,14 @@ void quantize_tensor_per_tensor_affine_cpu(
       qtensor.scalar_type(), "quantize_tensor_per_tensor_affine_cpu", [&]() {
         scalar_t* qdata = qtensor.data_ptr<scalar_t>();
         #if defined(__ARM_NEON__) || defined(__aarch64__)
-          quantize_tensor_arm<scalar_t>(
-              rdata, qdata, rtensor.numel(), scale, zero_point);
+          at::parallel_for(
+            0,
+            rtensor.numel(),
+            1,
+            [&rdata, &qdata, &scale, &zero_point](int64_t begin, int64_t end) {
+              quantize_tensor_arm<scalar_t>(
+                rdata + begin, qdata + begin, end - begin, scale, zero_point);
+            });
         #else
           // Fallback path
           int numel = rtensor.numel();
@@ -2927,8 +2933,14 @@ void dequantize_tensor_per_tensor_affine_cpu(
       qtensor.scalar_type(), "dequantize_tensor_per_tensor_affine_cpu", [&]() {
         const scalar_t* qdata = qtensor.data_ptr<scalar_t>();
         #if defined(__ARM_NEON__) || defined(__aarch64__)
-          dequantize_tensor_arm<scalar_t>(
-              qdata, rdata, qtensor.numel(), scale, zero_point);
+          at::parallel_for(
+            0,
+            qtensor.numel(),
+            1,
+            [&qdata, &rdata, &scale, &zero_point](int64_t begin, int64_t end) {
+              dequantize_tensor_arm<scalar_t>(
+                qdata + begin, rdata + begin, end - begin, scale, zero_point);
+            });
         #else
           // Fallback path
           int numel = qtensor.numel();
