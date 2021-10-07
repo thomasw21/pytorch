@@ -124,9 +124,6 @@ Node::Node(OpKind op, OpList operands,
       dag_hash_(dag_hash) {
   metadata_.scope = GetCurrentScope();
   metadata_.frame_info = GetFrameInfo();
-  for (auto& operand : operands) {
-    AddOperand(operand.node, operand.index);
-  }
 }
 
 Node::Node(OpKind op, size_t num_outputs,
@@ -141,11 +138,6 @@ Node::Node(OpKind op, size_t num_outputs,
 
 Node::~Node() {}
 
-void Node::AddOperand(NodePtr node, size_t index) {
-  LTC_CHECK_LT(index, node->num_outputs());
-  operands_.push_back(std::move(node));
-  operands_as_outputs_.push_back(Output(operands_.back().get(), index));
-}
 
 std::string Node::ToString() const {
   std::stringstream ss;

@@ -115,6 +115,8 @@ class {schema.node_name} : public {self.node_base} {{
       {clone_impl}
   }}
 
+  const std::vector<Output>& operands() const override {{ return operands_as_outputs_; }}
+
   c10::ScalarType out_dtype_;
   std::vector<int64_t> out_shape_;
   {scalar_decls}
