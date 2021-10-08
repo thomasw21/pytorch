@@ -1,5 +1,5 @@
 import argparse
-from common import run, topics
+from common import run, topics, commit_files_changed, commit_title, get_features
 from collections import defaultdict
 import os
 import csv
@@ -74,6 +74,65 @@ class CommitList:
             for commit in rows:
                 writer.writerow([commit.commit_hash, commit.category, commit.topic, commit.title])
 
+    def keywordInFile(file, keywords):
+        for key in keywords:
+            if key in file:
+                return True
+        return False
+
+    @staticmethod
+    def categorize(commit_hash, title):
+        title = commit_title(commit_hash)
+        # update this to check if each file starts with caffe2
+        if 'caffe2' in title:
+            return Commit(commit_hash, 'caffe2', 'Untopiced', title)
+
+        labels = []
+        if 'Reverted' in labels:
+            return Commit(commit_hash, 'skip', 'Untopiced', title)
+
+        category = 'Uncategorized'
+        files_changed = commit_files_changed(commit_hash)
+        for file in files_changed:
+            file_lowercase = file.lower()
+            # datapipe(s), torch/utils/data, test_{dataloader, datapipe}
+            if CommitList.keywordInFile(file, ['torch/utils/data', 'test_dataloader', 'test_datapipe']):
+                category = 'dataloader_frontend'
+                break
+            if CommitList.keywordInFile(file, ['torch/csrc/api', 'test/cpp/api']):
+                category = 'cpp_frontend'
+                break
+            if CommitList.keywordInFile(file, ['distributed', 'c10d']):
+                category = 'distributed'
+                break
+            if ('vulkan' in file_lowercase):
+                category = 'vulkan'
+                break
+            if ('Foreach' in file_lowercase):
+                category = 'foreach_frontend'
+                break
+            if 'onnx' in file_lowercase:
+                category = 'onnx'
+                break
+            if CommitList.keywordInFile(file, ['torch/fx', 'test_fx'] ):
+                category = 'fx'
+                break
+            # torch/quantization, test/quantization, aten/src/ATen/native/quantized, torch/nn/{quantized, quantizable}
+            if CommitList.keywordInFile(file, ['torch/quantization', 'test/quantization', 'aten/src/ATen/native/quantized', 'torch/nn/quantiz']):
+                category = 'quantization'
+                break
+            if CommitList.keywordInFile(file, ['torch/package', 'test/package'] ):
+                category = 'package'
+                break
+            if CommitList.keywordInFile(file, ['torch/csrc/jit/mobile', 'aten/src/ATen/native/metal', 'test/mobile'] ):
+                category = 'mobile'
+                break
+            if CommitList.keywordInFile(file, ['aten/src/ATen/native/LinearAlgebra.cpp', 'test/test_linalg.py', 'torch/linalg']):
+                category = 'linalg_frontend'
+                break
+
+        return Commit(commit_hash, category, 'Untopiced', title)
+
     @staticmethod
     def get_commits_between(base_version, new_version):
         cmd = f'git merge-base {base_version} {new_version}'
@@ -88,7 +147,7 @@ class CommitList:
 
         log_lines = commits.split('\n')
         hashes, titles = zip(*[log_line.split(' ', 1) for log_line in log_lines])
-        return [Commit(commit_hash, 'Uncategorized', 'Untopiced', title) for commit_hash, title in zip(hashes, titles)]
+        return [CommitList.categorize(commit_hash, title) for commit_hash, title in zip(hashes, titles)]
 
     def filter(self, *, category=None, topic=None):
         commits = self.commits
