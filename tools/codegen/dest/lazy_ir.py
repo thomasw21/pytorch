@@ -27,7 +27,7 @@ def node_ctor_inputs(func: LazyIrSchema) -> str:
                 raise AssertionError("TODO not sure if there are other valid types to handle here")
         else:
             if isinstance(arg.type, VectorCType):
-                node_ctor_values.append(f"Helpers::I64List({arg.name})")
+                node_ctor_values.append(f"lazy_tensors::util::ToVector<{arg.type.elem.type}>({arg.name})")
             else:
                 node_ctor_values.append(f"{arg.name}")
 
