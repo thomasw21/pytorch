@@ -2046,6 +2046,15 @@ works_list = [
     'unsqueeze',
     'view',
     'where',
+    'bool',
+    'byte',
+    'char',
+    'double',
+    'float',
+    'half',
+    'int',
+    'long',
+    'short',
 ]
 
 known_failures = [
