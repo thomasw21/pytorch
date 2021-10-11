@@ -697,7 +697,6 @@ class TestSparseCSR(TestCase):
         _test_spadd_shape(10, [100, 1])
         _test_spadd_shape(10, [1, 100])
 
-    @onlyCUDA
     @dtypes(*floating_and_complex_types())
     def test_sparse_add(self, device, dtype):
         def run_test(m, n, index_dtype):
@@ -719,7 +718,6 @@ class TestSparseCSR(TestCase):
             for m, n in itertools.product([3, 5], [3, 5]):
                 run_test(m, n, index_dtype)
 
-    @onlyCUDA
     @dtypes(*floating_and_complex_types())
     def test_sparse_add_errors(self, device, dtype):
         def run_test(index_type):
