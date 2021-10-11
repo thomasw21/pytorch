@@ -186,6 +186,9 @@ torch::CppFunction autogradNotImplementedFallback() {
   return torch::CppFunction::makeFromBoxedFunction<&autogradNotImplementedFallbackImpl>();
 }
 
+// If we need to we could codegen this to avoid duplication
+static const std::vector<std::string> NEEDS_METADATA_CHANGE = {"aten::view_as_complex", "aten::view_as_real", "aten::_conj", "aten::_neg_view"};
+
 void autogradNotImplementedInplaceOrViewFallbackImpl(const c10::OperatorHandle& op, c10::DispatchKeySet dispatch_keys, torch::jit::Stack* stack) {
   // Mimics a subset of the logic from ADInplaceOrViewType kernel:
   // - see gen_inplace_or_view_type.py
@@ -257,6 +260,29 @@ void autogradNotImplementedInplaceOrViewFallbackImpl(const c10::OperatorHandle& 
     "input and the first output (the output can be a vector of tensors). Please change the "
     "order of your operator's parameters so that this is the case.");
   const bool is_view = aliased_input_idx != -1;
+  const bool need_view_func = is_view
+                         && (std::find(NEEDS_METADATA_CHANGE.begin(), NEEDS_METADATA_CHANGE.end(), op_name) != NEEDS_METADATA_CHANGE.end()
+                             || !aliased_input.unsafeGetTensorImpl()->support_as_strided());
+
+  std::function<at::Tensor(const at::Tensor&)> view_func = nullptr;
+  std::vector<c10::IValue> stack_args_copy;
+  if (need_view_func) {
+    // We always override the 0th index, so skip copying it
+    stack_args_copy = std::vector<c10::IValue>(stack->begin() + stack_start + 1, stack->end());
+  }
+
+  if (need_view_func) {
+    view_func = [op=op, stack_args_copy=stack_args_copy](const at::Tensor& t) {
+      // - Maybe add a test for this...
+      // - See NOTE: [ Limitations of ADInplaceOrView boxed kernel ]
+      // - We have to make another copy because the same lambda can be used twice! e.g., double backward
+      //   and also concurrently from multiple threads
+      std::vector<c10::IValue> stack_args_copy_copy(stack_args_copy);
+      stack_args_copy_copy.insert(stack_args_copy_copy.begin(), t);
+      op.callBoxed(&stack_args_copy_copy);
+      return stack_args_copy_copy[0].toTensor();
+    };
+  }
 
   {
     at::AutoDispatchBelowADInplaceOrView guard;
@@ -293,11 +319,7 @@ void autogradNotImplementedInplaceOrViewFallbackImpl(const c10::OperatorHandle& 
         /* tensor=*/std::move(aliased_output_iv).toTensor(),
         /* is_bw_differentiable=*/true,
         /* is_fw_differentiable=*/true,
-        /* view_func=*/[op_name=op_name](const at::Tensor&) {
-          // We always need this view_func because otherwise if we do in-place on this view,
-          // we would implicitly use AsStridedBackward instead of the NotImplemented node.
-          // For the cross-dtype/non-strided cases, we would create something like this anyway
-          TORCH_CHECK(false, "Mutating the view ", op_name, " which does not have a derivative implemented is forbidden."); return at::Tensor();},
+        /* view_func=*/view_func,
         /* creation_meta=*/InferenceMode::is_enabled() ? CreationMeta::INFERENCE_MODE : (at::GradMode::is_enabled() ? CreationMeta::DEFAULT : CreationMeta::NO_GRAD_MODE));
       stack->at(stack->size() - num_returns + aliased_output_idx) = result;
     }
