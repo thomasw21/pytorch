@@ -1,12 +1,10 @@
 import torch
-import warnings
-import unittest
 import random
 import itertools
 from torch.testing import get_all_complex_dtypes, get_all_fp_dtypes, floating_and_complex_types, make_tensor
 from torch.testing._internal.common_cuda import SM53OrLater, SM80OrLater, TEST_CUSPARSE_GENERIC
 from torch.testing._internal.common_utils import \
-    (IS_MACOS, IS_WINDOWS, TestCase, run_tests, load_tests, coalescedonoff)
+    (TestCase, run_tests, load_tests, coalescedonoff)
 from torch.testing._internal.common_device_type import \
     (instantiate_device_type_tests, dtypes, dtypesIfCUDA, onlyCPU, onlyCUDA, skipCUDAIfNoCusparseGeneric,
      precisionOverride, skipMeta)
@@ -472,24 +470,6 @@ class TestSparseCSR(TestCase):
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
 
-    @onlyCPU
-    @unittest.skipIf(IS_MACOS or IS_WINDOWS, "MKL doesn't work on windows or mac")
-    @dtypes(torch.float, torch.double)
-    def test_mkl_matvec_warnings(self, device, dtype):
-        if torch.has_mkl:
-            for index_dtype in [torch.int32, torch.int64]:
-                sp = torch.sparse_csr_tensor(torch.tensor([0, 2, 4]),
-                                             torch.tensor([0, 1, 0, 1]),
-                                             torch.tensor([1, 2, 3, 4], dtype=dtype, device=device))
-                vec = torch.randn((2, 1), dtype=dtype, device=device)
-                with warnings.catch_warnings(record=True) as w:
-                    sp.matmul(vec)
-                    self.assertEqual(len(w), 2)
-                    self.assertIn("Pytorch is compiled with MKL LP64 and will convert crow_indices to int32",
-                                  str(w[0].message))
-                    self.assertIn("Pytorch is compiled with MKL LP64 and will convert col_indices to int32",
-                                  str(w[1].message))
-
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):
         size = (4, 2, 4)
@@ -563,7 +543,7 @@ class TestSparseCSR(TestCase):
                     test_shape(i, j, k, i * j // 2)
         test_shape(4, 4, 4, 0)
 
-    @dtypes(*floating_types())
+    @dtypes(*floating_and_complex_types())
     @dtypesIfCUDA(*get_all_complex_dtypes(),
                   *get_all_fp_dtypes(include_half=SM53OrLater and TEST_CUSPARSE_GENERIC,
                                      include_bfloat16=SM80OrLater and TEST_CUSPARSE_GENERIC))
@@ -582,7 +562,7 @@ class TestSparseCSR(TestCase):
             test_shape(7, 8, 9, 20, False, index_dtype)
             test_shape(7, 8, 9, 20, True, index_dtype)
 
-    @dtypes(*floating_types())
+    @dtypes(*floating_and_complex_types())
     @dtypesIfCUDA(*get_all_complex_dtypes(),
                   *get_all_fp_dtypes(include_half=SM53OrLater and TEST_CUSPARSE_GENERIC,
                                      include_bfloat16=SM80OrLater and TEST_CUSPARSE_GENERIC))
@@ -613,7 +593,7 @@ class TestSparseCSR(TestCase):
             test_shape(7, 8, 9, 20, False, index_dtype, (1, 1))
             test_shape(7, 8, 9, 20, True, index_dtype, (1, 1))
 
-    @onlyCUDA
+    @dtypes(*floating_and_complex_types())
     @precisionOverride({torch.double: 1e-8, torch.float: 1e-4, torch.bfloat16: 0.6,
                         torch.half: 1e-1, torch.cfloat: 1e-4, torch.cdouble: 1e-8})
     @dtypesIfCUDA(*torch.testing.get_all_complex_dtypes(),
@@ -649,7 +629,7 @@ class TestSparseCSR(TestCase):
             m2 = maybe_transpose(t3, torch.randn(50, 25, device=device).to(dtype))
             _test_addmm_addmv(self, torch.addmm, M, m1, m2, transpose_out=t4, layout=torch.sparse_csr, all_sparse=True)
 
-    @onlyCUDA
+    @dtypes(*floating_and_complex_types())
     @dtypesIfCUDA(*torch.testing.get_all_complex_dtypes(),
                   *torch.testing.get_all_fp_dtypes(include_bfloat16=SM80OrLater,
                                                    include_half=SM53OrLater))

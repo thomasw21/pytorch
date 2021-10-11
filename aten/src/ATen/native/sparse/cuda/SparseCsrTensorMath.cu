@@ -73,9 +73,9 @@ using namespace at::sparse_csr;
 // certain utiliy functions are usable from sparse COO.
 using namespace at::sparse;
 
-Tensor& addmm_out_sparse_csr_dense_cuda(
+Tensor& addmm_out_sparse_csr_cuda(
     const Tensor& self,
-    const SparseCsrTensor& mat1,
+    const Tensor& mat1,
     const Tensor& mat2,
     const Scalar& beta,
     const Scalar& alpha,
