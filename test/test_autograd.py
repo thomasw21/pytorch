@@ -7474,6 +7474,29 @@ class TestAutogradForwardModeBatchedGrad(TestCase):
         self.assertTrue(gradcheck(torch.sin, a))
         self.assertTrue(gradcheck(torch.add, (a, b)))
 
+    def test_out_of_place_not_same_layout(self):
+        input = torch.zeros([2, 2]).transpose(0, 1)
+        tangent = torch.zeros([2, 2, 2])
+
+        def jvp(tangent):
+            with fwAD.dual_level():
+                dual_tensor = fwAD.make_dual(input, tangent)
+                return fwAD.unpack_dual(dual_tensor)[1]
+        torch._vmap_internals._vmap(jvp, 0, 0)(tangent)
+
+    def test_out_of_place_not_same_layout_inplace_on_view(self):
+        input = torch.zeros([2, 2]).transpose(0, 1)
+        tangent = torch.zeros([2, 2, 2])
+        another_batched_arg = torch.zeros([2, 2, 2])
+
+        def jvp(tangent, another_batched_arg):
+            with fwAD.dual_level():
+                dual_tensor = fwAD.make_dual(input, tangent)
+                another_batched_arg = another_batched_arg.view_as(another_batched_arg)  # make it a view
+                another_batched_arg.copy_(dual_tensor)
+                return fwAD.unpack_dual(dual_tensor)[1]
+        torch._vmap_internals._vmap(jvp, 0, 0)(tangent, another_batched_arg)
+
 class TestAutogradForwardMode(TestCase):
     def tearDown(self):
         # Ensure that a failing test won't make others fail
