@@ -715,7 +715,6 @@ class TestSparseCSR(TestCase):
         for index_dtype in [torch.int32, torch.int64]:
             run_test(index_dtype)
 
-    @onlyCUDA
     @skipCUDAIf(
         not _check_cusparse_triangular_solve_available(),
         "cuSparse Generic API SpSV is not available"
