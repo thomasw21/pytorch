@@ -269,8 +269,14 @@ test_libtorch() {
     # Wait for background download to finish
     wait
     # Exclude IMethodTest that relies on torch::deploy, which will instead be ran in test_deploy.
-    OMP_NUM_THREADS=2 TORCH_CPP_TEST_MNIST_PATH="test/cpp/api/mnist" "$TORCH_BIN_DIR"/test_api --gtest_filter='-IMethodTest.*' --gtest_output=xml:$TEST_REPORTS_DIR/test_api.xml
+    # OMP_NUM_THREADS=2 TORCH_CPP_TEST_MNIST_PATH="test/cpp/api/mnist" "$TORCH_BIN_DIR"/test_api --gtest_filter='-IMethodTest.*' --gtest_output=xml:$TEST_REPORTS_DIR/test_api.xml
     "$TORCH_BIN_DIR"/test_tensorexpr --gtest_output=xml:$TEST_REPORTS_DIR/test_tensorexpr.xml
+    python test/test_gtest GTest.test_api
+
+    python test/test_gtest GTest.test_tensorexpr
+    python test/test_gtest GTest.test_mobile_nnc
+
+>>>>>>> 9131d58e5a ([wip] Add more C++ tests to Python wrapper)
     if [[ "${BUILD_ENVIRONMENT}" == pytorch-linux-xenial-py3* ]]; then
       if [[ "${BUILD_ENVIRONMENT}" != *android* && "${BUILD_ENVIRONMENT}" != *cuda* && "${BUILD_ENVIRONMENT}" != *asan* ]]; then
         # TODO: Consider to run static_runtime_test from $TORCH_BIN_DIR (may need modify build script)
