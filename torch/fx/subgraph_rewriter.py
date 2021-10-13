@@ -28,9 +28,9 @@ class _SubgraphMatcher:
         assert len(self.pattern_anchor.all_input_nodes) == 1, \
             "Pattern matching on multiple outputs is not supported"
         # Maps nodes in the pattern subgraph to nodes in the larger graph
-        self.nodes_map: Dict[Node, Node] = {}
+        self.nodes_map: List[Dict[Node, Node]] = [{}]
 
-    def matches_subgraph_from_anchor(self, anchor: Node) -> bool:
+    def matches_subgraph_from_anchor(self, anchor: Node) -> List[Dict[Node, Node]]:
         """
         Checks if the whole pattern can be matched starting from
         ``anchor`` in the larger graph.
@@ -38,16 +38,20 @@ class _SubgraphMatcher:
         Pattern matching is done by recursively comparing the pattern
         node's use-def relationships against the graph node's.
         """
-        self.nodes_map = {}
-        return self._match_nodes(self.pattern_anchor, anchor)
+        self.nodes_map: List[Dict[Node, Node]] = [{}]
+        self._match_nodes(self.pattern_anchor, anchor)
+
+        # We need to filter out the one that are empty
+        self.nodes_map = [elt for elt in self.nodes_map if len(elt) > 0]
+        return self.nodes_map
 
     # Compare the pattern node `pn` against the graph node `gn`
-    def _match_nodes(self, pn: Node, gn: Node) -> bool:
+    def _match_nodes(self, pn: Node, gn: Node, graph_id: int = 0) -> bool:
 
         # Check if we've already matched these nodes in the current
         # traversal
-        if pn in self.nodes_map:
-            return self.nodes_map[pn] == gn
+        if pn in self.nodes_map[graph_id]:
+            return self.nodes_map[graph_id][pn] == gn
 
         def attributes_are_equal(pn: Node, gn: Node) -> bool:
             # Use placeholder and output nodes as wildcards. The
@@ -63,7 +67,7 @@ class _SubgraphMatcher:
             return False
 
         # Optimistically mark `pn` as a match for `gn`
-        self.nodes_map[pn] = gn
+        self.nodes_map[graph_id][pn] = gn
 
         # Traverse the use-def relationships to ensure that `pn` is a true
         # match for `gn`
@@ -73,14 +77,22 @@ class _SubgraphMatcher:
                 and len(pn.all_input_nodes) != len(gn.all_input_nodes)):
             return False
         if pn.op == "output":
-            match_found = any(self._match_nodes(pn.all_input_nodes[0], gn_)
-                              for gn_ in gn.all_input_nodes)
+            # Only the first graph compares the output.
+            assert graph_id == 0
+            # We broadcast the result to all the other potential graph matching.
+            self.nodes_map += [copy.copy(self.nodes_map[graph_id]) for _ in range(len(gn.all_input_nodes) - 1)]
+            all_matches = tuple(self._match_nodes(pn.all_input_nodes[0], gn_, graph_id_)
+                              for graph_id_, gn_ in enumerate(gn.all_input_nodes)
+                           )
+            self.nodes_map = [node_map for node_map, match in zip(self.nodes_map, all_matches) if match]
+            # This is not really needed to return that value
+            return any(all_matches)
         else:
             match_found = (len(pn.all_input_nodes) == len(gn.all_input_nodes)
-                           and all(self._match_nodes(pn_, gn_) for pn_, gn_
+                           and all(self._match_nodes(pn_, gn_, graph_id) for pn_, gn_
                                    in zip(pn.all_input_nodes, gn.all_input_nodes)))
         if not match_found:
-            self.nodes_map.pop(pn)
+            self.nodes_map[graph_id].pop(pn)
             return False
 
         return True
@@ -256,50 +268,49 @@ def replace_pattern(gm: GraphModule, pattern: Callable, replacement: Callable) -
     matcher = _SubgraphMatcher(pattern_graph)
     matches: List[Match] = []
 
+    def pattern_is_contained(nodes_map: Dict[Node, Node]) -> bool:
+        # `lookup` represents all the nodes in `original_graph`
+        # that are part of `pattern`
+        lookup: Dict[Node, Node] = {v: k for k, v in nodes_map.items()}
+        for n in lookup.keys():
+
+            # Nodes that can "leak"...
+
+            # Placeholders (by definition)
+            if n.op == "placeholder":
+                continue
+            # Pattern output (acts as a container)
+            if lookup[n].op == "output":
+                continue
+            # Placeholders (by definition)
+            if lookup[n].op == "placeholder":
+                continue
+            # Result contained by pattern output (what we'll
+            # hook in to the new Graph, thus what we'll
+            # potentially use in other areas of the Graph as
+            # an input Node)
+            if (len(lookup[n].users) == 1
+                    and list(lookup[n].users.keys())[0].op == "output"):
+                continue
+
+            for user in n.users:
+                # If this node has users that were not in
+                # `lookup`, then it must leak out of the
+                # pattern subgraph
+                if user not in lookup:
+                    return False
+        return True
+
     # Consider each node as an "anchor" (deepest matching graph node)
     for anchor in original_graph.nodes:
-
-        if matcher.matches_subgraph_from_anchor(anchor):
-
-            def pattern_is_contained(nodes_map: Dict[Node, Node]) -> bool:
-                # `lookup` represents all the nodes in `original_graph`
-                # that are part of `pattern`
-                lookup: Dict[Node, Node] = {v: k for k, v in nodes_map.items()}
-                for n in lookup.keys():
-
-                    # Nodes that can "leak"...
-
-                    # Placeholders (by definition)
-                    if n.op == "placeholder":
-                        continue
-                    # Pattern output (acts as a container)
-                    if lookup[n].op == "output":
-                        continue
-                    # Result contained by pattern output (what we'll
-                    # hook in to the new Graph, thus what we'll
-                    # potentially use in other areas of the Graph as
-                    # an input Node)
-                    if (len(lookup[n].users) == 1
-                            and list(lookup[n].users.keys())[0].op == "output"):
-                        continue
-
-                    for user in n.users:
-                        # If this node has users that were not in
-                        # `lookup`, then it must leak out of the
-                        # pattern subgraph
-                        if user not in lookup:
-                            return False
-                return True
-
-            # It's not a match if the pattern leaks out into the rest
-            # of the graph
-            if pattern_is_contained(matcher.nodes_map):
+        potential_matches = matcher.matches_subgraph_from_anchor(anchor)
+        # It's not a match if the pattern leaks out into the rest
+        # of the graph
+        for node_map in potential_matches:
+            if pattern_is_contained(node_map):
                 # Shallow copy nodes_map
                 matches.append(Match(anchor=anchor,
-                                     nodes_map=copy.copy({
-                                         key: value
-                                         for key, value in matcher.nodes_map.items()
-                                     })))
+                                     nodes_map=copy.copy(node_map)))
 
     # The set of all nodes in `original_graph` that we've seen thus far
     # as part of a pattern match
@@ -367,48 +378,34 @@ def replace_pattern(gm: GraphModule, pattern: Callable, replacement: Callable) -
         # Hook the output Node of the replacement subgraph in to the
         # original Graph at the correct location
 
-        # CASE 1: We need to hook the replacement subgraph in somewhere
-        # in the middle of the graph. We replace the Node in the
-        # original graph that corresponds to the end of the pattern
-        # subgraph
-        if subgraph_output.op != "output":
-            pattern_outputs = [n for n in pattern_graph.nodes
+        pattern_outputs = [n for n in pattern_graph.nodes
+                           if n.op == "output"]
+        assert len(pattern_outputs)
+        replacement_outputs = [n for n in replacement_graph.nodes
                                if n.op == "output"]
-            assert len(pattern_outputs)
-            replacement_outputs = [n for n in replacement_graph.nodes
-                                   if n.op == "output"]
-            assert len(replacement_outputs) == len(pattern_outputs)
-            outputs_map = {p: r for r, p
-                           in zip(replacement_outputs, pattern_outputs)}
+        assert len(replacement_outputs) == len(pattern_outputs)
+        outputs_map = {p: r for r, p
+                       in zip(replacement_outputs, pattern_outputs)}
 
-            for pn, gn in match.nodes_map.items():
-                if gn.op == "placeholder":
-                    continue
+        for pn, gn in match.nodes_map.items():
+            if gn.op == "placeholder":
+                continue
 
-                # We search for the node corresponding to the output of the pattern.
-                if pn.op != "output":
-                    continue
-                assert subgraph_output == gn
+            # We search for the node corresponding to the output of the pattern.
+            if pn.op != "output":
+                continue
 
-                # We update all anchor inputs to the new nodes
-                rn = outputs_map[pn]
-                for pn_input, rn_input in zip(pn.all_input_nodes, rn.all_input_nodes):
-                    gn_input = match.nodes_map[pn_input]
-                    rn_input_in_original_graph = val_map[rn_input]
-                    gn_input.replace_all_uses_with(rn_input_in_original_graph)
-                    # We store the updated node point in case other nodes want to use it
-                    match_changed_node[gn_input] = rn_input_in_original_graph
+            # the anchor should correspond to `subgraph_output`
+            assert subgraph_output == gn
 
-            assert subgraph_output.op != "output"
-        # CASE 2: The pattern subgraph match extends to the end of the
-        # original graph, so we need to change the current graph's
-        # output Node to reflect the insertion of the replacement graph.
-        # We'll keep the current output Node, but update its args and
-        # `_input_nodes` as necessary
-        else:
-            subgraph_output.args = ((copied_output,))
-            if isinstance(copied_output, Node):
-                subgraph_output._input_nodes = {copied_output: None}
+            # We update all anchor inputs to the new nodes
+            rn = outputs_map[pn]
+            for pn_input, rn_input in zip(pn.all_input_nodes, rn.all_input_nodes):
+                gn_input = match.nodes_map[pn_input]
+                rn_input_in_original_graph = val_map[rn_input]
+                gn_input.replace_all_uses_with(rn_input_in_original_graph)
+                # We store the updated node point in case other nodes want to use it
+                match_changed_node[gn_input] = rn_input_in_original_graph
 
         assert isinstance(copied_output, Node)
         # Erase the `pattern` nodes
