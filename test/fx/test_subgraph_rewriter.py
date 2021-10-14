@@ -509,9 +509,7 @@ class TestSubgraphRewriter(JitTestCase):
 
         traced = symbolic_trace(f)
 
-        print(traced.graph)
         subgraph_rewriter.replace_pattern(traced, pattern, replacement)
-        print(traced.graph)
         traced.graph.lint()
 
         x = torch.randn(3, 4)
@@ -519,7 +517,7 @@ class TestSubgraphRewriter(JitTestCase):
         test_outs = traced.forward(x)
         self.assertEqual(ref_outs, test_outs)
 
-    def test_subgraph_rewriter_replaces_parallel_functions_when_agregated(self):
+    def test_subgraph_rewriter_replaces_parallel_functions_when_aggregated(self):
         def f(x):
             y = torch.sigmoid(x)
             z = torch.sigmoid(x)
@@ -538,9 +536,7 @@ class TestSubgraphRewriter(JitTestCase):
 
         traced = symbolic_trace(f)
 
-        print(traced.graph)
         subgraph_rewriter.replace_pattern(traced, pattern, replacement)
-        print(traced.graph)
         traced.graph.lint()
 
         x = torch.randn(3, 4)
