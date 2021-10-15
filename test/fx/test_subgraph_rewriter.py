@@ -489,3 +489,57 @@ class TestSubgraphRewriter(JitTestCase):
         ref_outs = comparison_fn(x)
         test_outs = traced.forward(x)
         self.assertEqual(ref_outs, test_outs)
+
+    def test_subgraph_rewriter_replaces_parallel_functions(self):
+        def f(x):
+            y = torch.sigmoid(x)
+            z = torch.sigmoid(x)
+            return y, z
+
+        def pattern(x):
+            return torch.sigmoid(x)
+
+        def replacement(x):
+            return torch.relu(x)
+
+        def comparison(x):
+            y = torch.relu(x)
+            z = torch.relu(x)
+            return y, z
+
+        traced = symbolic_trace(f)
+
+        subgraph_rewriter.replace_pattern(traced, pattern, replacement)
+        traced.graph.lint()
+
+        x = torch.randn(3, 4)
+        ref_outs = comparison(x)
+        test_outs = traced.forward(x)
+        self.assertEqual(ref_outs, test_outs)
+
+    def test_subgraph_rewriter_replaces_parallel_functions_when_aggregated(self):
+        def f(x):
+            y = torch.sigmoid(x)
+            z = torch.sigmoid(x)
+            return y + z
+
+        def pattern(x):
+            return torch.sigmoid(x)
+
+        def replacement(x):
+            return torch.relu(x)
+
+        def comparison(x):
+            y = torch.relu(x)
+            z = torch.relu(x)
+            return y + z
+
+        traced = symbolic_trace(f)
+
+        subgraph_rewriter.replace_pattern(traced, pattern, replacement)
+        traced.graph.lint()
+
+        x = torch.randn(3, 4)
+        ref_outs = comparison(x)
+        test_outs = traced.forward(x)
+        self.assertEqual(ref_outs, test_outs)
